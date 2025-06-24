@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    @apply h-full;
+  }
+  
+  body {
+    @apply bg-gray-900 text-white overflow-hidden;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-fuel-green text-black font-semibold rounded-lg hover:bg-green-400 transition-colors;
+  }
+  
+  .btn-secondary {
+    @apply px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors;
+  }
+  
+  .card {
+    @apply bg-gray-800 rounded-xl p-4 border border-gray-700;
+  }
+}
