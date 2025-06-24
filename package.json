@@ -13,7 +13,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^0.0.66",
     "@fuel-wallet/sdk": "^0.16.1",
-    "@fuels/connectors": "^0.40.0",
+    "@fuels/connectors": "0.43.2",
     "@fuels/react": "^0.40.0",
     "@goat-sdk/adapter-vercel-ai": "latest",
     "@goat-sdk/core": "latest",
@@ -22,7 +22,7 @@
     "ai": "^3.4.0",
     "axios": "^1.6.2",
     "framer-motion": "^10.16.16",
-    "fuels": "^0.100.3",
+    "fuels": "0.101.1",
     "lucide-react": "^0.294.0",
     "mira-dex-ts": "^1.1.42",
     "react": "^18.3.1",

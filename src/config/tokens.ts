@@ -10,13 +10,13 @@ export interface TokenConfig {
 }
 
 // Base asset ID (all zeros) - this is ETH on Fuel
-const BASE_ASSET_ID = '0x0000000000000000000000000000000000000000000000000000000000000000';
+export const BASE_ASSET_ID = '0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07';
 
 export const FUEL_TESTNET_TOKENS: TokenConfig[] = [
   {
     symbol: 'ETH',
     name: 'Ethereum',
-    address: '0x0000000000000000000000000000000000000000', // Native asset
+    address: '0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07', // Native asset
     assetId: BASE_ASSET_ID, // ETH is the native/base asset on Fuel
     decimals: 9, // ETH has 9 decimals on Fuel Network
     coingeckoId: 'ethereum',
@@ -49,7 +49,7 @@ export const FUEL_MAINNET_TOKENS: TokenConfig[] = [
   {
     symbol: 'ETH',
     name: 'Ethereum',
-    address: '0x0000000000000000000000000000000000000000', // Native asset
+    address: '0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07', // Native asset
     assetId: BASE_ASSET_ID, // ETH is the native/base asset on Fuel
     decimals: 9, // ETH has 9 decimals on Fuel Network
     coingeckoId: 'ethereum',
