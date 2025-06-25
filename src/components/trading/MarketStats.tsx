@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Activity, BarChart3, ChevronDown } from 'lucide-react';
 import { MarketData } from '@/types';
-import { getTokens } from '@/config/tokens';
+import { getTokens } from '@/config/index';
 import { useNetwork } from '@/contexts/NetworkContext';
 
 interface MarketStatsProps {

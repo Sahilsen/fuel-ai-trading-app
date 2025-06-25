@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getNetworkConfig } from '@/config/networks';
+import { getNetworkConfig } from '@/config/index';
 import { useWallet, useIsConnected } from '@fuels/react';
 
 interface NetworkContextProps {

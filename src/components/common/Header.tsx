@@ -1,5 +1,5 @@
 import React from 'react';
-import { WalletConnector } from '@/components/wallet/WalletConnector';
+import { WalletConnector } from '@/components/wallet';
 import { Bot, ChevronLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNetwork } from '@/contexts/NetworkContext';

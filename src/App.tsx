@@ -7,12 +7,11 @@ import {
   useWallet,
   useConnectors 
 } from '@fuels/react';
-import { Header } from '@/components/common/Header';
-import { AgentSelector } from '@/components/trading/AgentSelector';
-import { TradingDashboard } from '@/components/trading/TradingDashboard';
+import { Header } from '@/components/common';
+import { AgentSelector, TradingDashboard } from '@/components/trading';
 import { AgentPersonality } from '@/types';
 import { useNetwork } from '@/contexts/NetworkContext';
-import { getNetworkConfig } from '@/config/networks';
+import { getNetworkConfig } from '@/config';
 
 // Network error component
 function NetworkError({ currentNetwork }: { currentNetwork: string }) {

@@ -1,7 +1,3 @@
-import { Provider } from 'fuels';
-import { config } from '@/config/constants';
-import axios from 'axios';
-
 export interface WhaleTransaction {
   hash: string;
   from: string;
@@ -13,50 +9,17 @@ export interface WhaleTransaction {
 }
 
 export class WhaleTrackerService {
-  private provider: Provider | null = null;
   private whaleThreshold = 10000; // $10k USD
   private subscribers: ((tx: WhaleTransaction) => void)[] = [];
   private intervalId: any = null;
 
   async initialize() {
-    try {
-      // Use QuickNode endpoint if available, otherwise fallback to default
-      const rpcUrl = config.quicknodeFuelUrl || 'https://testnet.fuel.network/v1/graphql';
-      this.provider = await Provider.create(rpcUrl);
-      
-      console.log('Whale tracker initialized with:', rpcUrl);
-    } catch (error) {
-      console.error('Failed to initialize whale tracker:', error);
-    }
+    console.log('Whale tracker initialized with mock data');
   }
 
   async getRecentWhaleTransactions(tokenAddress?: string): Promise<WhaleTransaction[]> {
-    if (!this.provider) {
-      console.warn('Whale tracker not initialized');
-      return [];
-    }
-
-    try {
-      // For Fuel testnet, we'll need to implement proper transaction querying
-      // This is a placeholder that shows the structure
-      const latestBlock = await this.provider.getBlock('latest');
-      
-      if (!latestBlock) {
-        return [];
-      }
-
-      // In a real implementation, you would:
-      // 1. Query transaction receipts
-      // 2. Filter by value threshold
-      // 3. Decode token transfers
-      // 4. Convert to USD values
-
-      // For now, return mock whale transactions for demo
-      return this.generateMockWhaleTransactions();
-    } catch (error) {
-      console.error('Failed to fetch whale transactions:', error);
-      return [];
-    }
+    // Return mock whale transactions for demo purposes
+    return this.generateMockWhaleTransactions();
   }
 
   private generateMockWhaleTransactions(): WhaleTransaction[] {

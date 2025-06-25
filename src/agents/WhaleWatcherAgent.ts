@@ -1,6 +1,6 @@
 import { BaseAgent } from './BaseAgent';
 import { MarketData } from '@/types';
-import { whaleTrackerService } from '@/services/WhaleTrackerService';
+import { whaleTrackerService } from '@/services';
 
 export class WhaleWatcherAgent extends BaseAgent {
   private recentWhaleActivity: any[] = [];

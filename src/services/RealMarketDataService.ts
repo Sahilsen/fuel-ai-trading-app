@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { MarketData } from '@/types';
-import { config } from '@/config/constants';
-import { getTokenBySymbol } from '@/config/tokens';
+import { config } from '@/config';
+import { getTokenBySymbol } from '@/config';
 
 interface PriceHistory {
   time: string;

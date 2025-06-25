@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FuelProvider } from '@fuels/react';
 import { defaultConnectors } from '@fuels/connectors';
-import { validateConfig } from '@/config/constants';
+import { validateConfig } from '@/config';
 import { NetworkProvider } from '@/contexts/NetworkContext';
 import App from './App';
 import './index.css';

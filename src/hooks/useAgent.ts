@@ -1,10 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { BaseAgent } from '@/agents/BaseAgent';
-import { FOMOerAgent } from '@/agents/FOMOerAgent';
-import { DegenAgent } from '@/agents/DegenAgent';
-import { DiamondHandsAgent } from '@/agents/DiamondHandsAgent';
-import { WhaleWatcherAgent } from '@/agents/WhaleWatcherAgent';
-import { realMarketDataService } from '@/services/RealMarketDataService';
+import { createAgent, BaseAgent } from '@/agents';
+import { realMarketDataService } from '@/services';
 import { TradeDecision, MarketData, AgentPersonality } from '@/types';
 import { useNetwork } from '@/contexts/NetworkContext';
 
@@ -22,26 +18,8 @@ export const useAgent = (agentType: AgentPersonality, selectedToken: string = 'E
   }, [isTestnet]);
 
   useEffect(() => {
-    // Initialize agent based on type
-    let newAgent: BaseAgent;
-    
-    switch (agentType) {
-      case 'fomor':
-        newAgent = new FOMOerAgent('fomor');
-        break;
-      case 'degen':
-        newAgent = new DegenAgent('degen');
-        break;
-      case 'diamond-hands':
-        newAgent = new DiamondHandsAgent('diamond-hands');
-        break;
-      case 'whale-watcher':
-        newAgent = new WhaleWatcherAgent('whale-watcher');
-        break;
-      default:
-        return;
-    }
-
+    // Initialize agent based on type using the factory function
+    const newAgent = createAgent(agentType);
     setAgent(newAgent);
   }, [agentType]);
 

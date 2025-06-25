@@ -1,16 +1,16 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { useAgent } from '@/hooks/useAgent';
-import { useTrading } from '@/hooks/useTrading';
-import { useNotifications } from '@/hooks/useNotifications';
-import { MarketStats } from './MarketStats';
-import { TradingChart } from './TradingChart';
-import { ChatInterface } from './ChatInterface';
-import { TradeConfirmModal } from './TradeConfirmModal';
-import { AgentMetrics } from './AgentMetrics';
-import { WhaleActivity } from './WhaleActivity';
-import { WalletBalance } from '@/components/wallet/WalletBalance';
-import { NotificationContainer } from '@/components/common/NotificationToast';
+import { useAgent, useTrading, useNotifications } from '@/hooks';
+import { 
+  MarketStats, 
+  TradingChart, 
+  ChatInterface, 
+  TradeConfirmModal, 
+  AgentMetrics, 
+  WhaleActivity 
+} from '.';
+import { WalletBalance } from '@/components/wallet';
+import { NotificationContainer } from '@/components/common';
 import { AgentPersonality, TradeDecision, ChatMessage } from '@/types';
 import { useNetwork } from '@/contexts/NetworkContext';
 
@@ -21,7 +21,6 @@ interface TradingDashboardProps {
 
 export const TradingDashboard: React.FC<TradingDashboardProps> = ({ 
   agentType,
-  walletAddress 
 }) => {
   const [selectedToken, setSelectedToken] = useState('ETH');
   const { agent, marketData, getMetrics } = useAgent(agentType, selectedToken);

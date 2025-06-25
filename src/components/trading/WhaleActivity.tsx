@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, TrendingUp, TrendingDown, Clock } from 'lucide-react';
-import { whaleTrackerService, WhaleTransaction } from '@/services/WhaleTrackerService';
+import { whaleTrackerService, WhaleTransaction } from '@/services';
 
 export const WhaleActivity: React.FC = () => {
   const [recentTransactions, setRecentTransactions] = useState<WhaleTransaction[]>([]);

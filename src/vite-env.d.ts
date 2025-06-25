@@ -16,7 +16,6 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env': {
         VITE_OPENAI_API_KEY: JSON.stringify(env.VITE_OPENAI_API_KEY),
-        VITE_QUICKNODE_FUEL_URL: JSON.stringify(env.VITE_QUICKNODE_FUEL_URL),
         VITE_QUICKNODE_CG_URL: JSON.stringify(env.VITE_QUICKNODE_CG_URL),
       },
       global: 'globalThis',

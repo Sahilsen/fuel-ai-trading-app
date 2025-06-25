@@ -3,7 +3,7 @@ import { useAccount, useWallet } from '@fuels/react';
 import { bn, BN, Address } from 'fuels';
 import { motion } from 'framer-motion';
 import { Wallet, RefreshCw, AlertCircle } from 'lucide-react';
-import { getTokens, getBaseAssetId } from '@/config/tokens';
+import { getTokens, getBaseAssetId } from '@/config';
 import { useNetwork } from '@/contexts/NetworkContext';
 
 interface TokenBalance {
@@ -40,53 +40,48 @@ export const WalletBalance: React.FC = () => {
   }, [wallet]);
 
   const formatBalance = (balance: BN | string | number, decimals: number): string => {
-  try {
-    // Convert to BN if not already
-    const amountBN = balance instanceof BN ? balance : bn(balance.toString());
-    
-    // Convert from smallest unit to display unit
-    const divisor = bn(10).pow(decimals);
-    const quotient = amountBN.div(divisor);
-    const remainder = amountBN.mod(divisor);
-    
-    // Format the amount
-    const wholeStr = quotient.toString();
-    const remainderStr = remainder.toString().padStart(decimals, '0');
-    
-    // For USDC/USDT show 2 decimals, others show up to 6
-    const decimalPlaces = decimals === 6 ? 2 : 6;
-    const decimals_str = remainderStr.slice(0, decimalPlaces);
-    
-    // Build the formatted string
-    let formattedAmount = `${wholeStr}.${decimals_str}`;
-    
-    // Parse to number for proper formatting
-    const num = parseFloat(formattedAmount);
-    
-    // Handle different ranges for better display
-    if (num === 0) {
+    try {
+      // Convert to BN if not already
+      const amountBN = balance instanceof BN ? balance : bn(balance.toString());
+      
+      // Convert from smallest unit to display unit
+      const divisor = bn(10).pow(decimals);
+      const quotient = amountBN.div(divisor);
+      const remainder = amountBN.mod(divisor);
+      
+      // Format the amount
+      const wholeStr = quotient.toString();
+      const remainderStr = remainder.toString().padStart(decimals, '0');
+      
+      // For USDC/USDT show 2 decimals, others show up to 6
+      const decimalPlaces = decimals === 6 ? 2 : 6;
+      const decimals_str = remainderStr.slice(0, decimalPlaces);
+      
+      // Build the formatted string
+      let formattedAmount = `${wholeStr}.${decimals_str}`;
+      
+      // Parse to number for proper formatting
+      const num = parseFloat(formattedAmount);
+      
+      // Handle different ranges for better display
+      if (num === 0) {
+        return '0.00';
+      } else if (num < 0.000001) {
+        return num.toFixed(9);
+      } else if (num < 0.01) {
+        return num.toFixed(6);
+      } else if (num < 1) {
+        return num.toFixed(4);
+      } else if (num < 100) {
+        return num.toFixed(3);
+      } else {
+        return num.toFixed(2);
+      }
+    } catch (error) {
+      console.error('Error formatting balance:', error);
       return '0.00';
-    } else if (num < 0.000001) {
-      // Very small amounts: use more decimal places
-      return num.toFixed(9);
-    } else if (num < 0.01) {
-      // Small amounts: use 6 decimal places
-      return num.toFixed(6);
-    } else if (num < 1) {
-      // Less than 1: use 4 decimal places
-      return num.toFixed(4);
-    } else if (num < 100) {
-      // Less than 100: use 3 decimal places
-      return num.toFixed(3);
-    } else {
-      // Large amounts: use 2 decimal places
-      return num.toFixed(2);
     }
-  } catch (error) {
-    console.error('Error formatting balance:', error);
-    return '0.00';
-  }
-};
+  };
 
   const loadBalances = async () => {
     if (!wallet || !account) {
@@ -120,17 +115,14 @@ export const WalletBalance: React.FC = () => {
             if (Array.isArray(balancesResult)) {
               const balanceEntry = balancesResult.find(
                 (b: any) => {
-                  // Handle different property names for asset ID
                   const assetId = b.assetId || b.asset_id || b.id;
                   return assetId && assetId.toLowerCase() === token.assetId.toLowerCase();
                 }
               );
               
               if (balanceEntry) {
-                // Handle different property names for amount
                 const amount = balanceEntry.amount || balanceEntry.value || balanceEntry.balance;
                 if (amount) {
-                  console.log(`Found balance for ${token.symbol}:`, amount.toString());
                   formattedAmount = formatBalance(amount, token.decimals);
                 }
               }
@@ -149,8 +141,6 @@ export const WalletBalance: React.FC = () => {
         
         // If all balances are still zero, try alternative methods
         if (tokenBalances.every(b => b.amount === '0.00')) {
-          console.log('All balances zero from provider.getBalances, trying wallet methods...');
-          
           // Method 2: Try using wallet's balance methods directly
           for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
@@ -159,31 +149,21 @@ export const WalletBalance: React.FC = () => {
               
               // For ETH (native asset), try different approaches
               if (token.assetId === getBaseAssetId() || token.isNative) {
-                console.log(`Trying to get native ETH balance...`);
-                
-                // Try method 1: wallet.getBalance() with no params
                 try {
                   balance = await wallet.getBalance();
-                  console.log('Got native balance (no params):', balance?.toString());
                 } catch (e1) {
-                  console.log('Failed to get balance without params:', e1);
-                  
-                  // Try method 2: wallet.getBalance() with base asset ID
                   try {
                     balance = await wallet.getBalance(getBaseAssetId());
-                    console.log('Got native balance (with base asset ID):', balance?.toString());
                   } catch (e2) {
-                    console.log('Failed to get balance with base asset ID:', e2);
+                    // Failed to get balance
                   }
                 }
               } else {
                 // For other tokens, use the specific asset ID
-                console.log(`Trying to get balance for ${token.symbol} with assetId: ${token.assetId}`);
                 try {
                   balance = await wallet.getBalance(token.assetId);
-                  console.log(`Got ${token.symbol} balance:`, balance?.toString());
                 } catch (e) {
-                  console.log(`Failed to get balance for ${token.symbol}:`, e);
+                  // Failed to get balance
                 }
               }
               
@@ -191,7 +171,7 @@ export const WalletBalance: React.FC = () => {
                 tokenBalances[i].amount = formatBalance(balance, token.decimals);
               }
             } catch (error) {
-              console.error(`Error getting balance for ${token.symbol}:`, error);
+              // Continue with next token
             }
           }
         }
@@ -202,7 +182,6 @@ export const WalletBalance: React.FC = () => {
       }
       
       setBalances(tokenBalances);
-      console.log('Final formatted balances:', tokenBalances);
       
     } catch (error) {
       console.error('Failed to load balances:', error);

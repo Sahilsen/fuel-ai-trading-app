@@ -1,7 +1,7 @@
 import { generateText } from 'ai';
 import { getOpenAIProvider, isOpenAIConfigured } from '@/lib/openai-provider';
 import { AgentPersonality, TradeDecision, MarketData, ChatMessage } from '@/types';
-import { getTokenBySymbol } from '@/config/tokens';
+import { getTokenBySymbol } from '@/config/index';
 
 export abstract class BaseAgent {
   protected personality: AgentPersonality;
