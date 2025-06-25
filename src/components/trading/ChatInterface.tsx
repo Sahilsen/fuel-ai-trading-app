@@ -98,7 +98,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <div className={`inline-block p-3 rounded-lg ${
                   message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'
                 }`}>
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  {/* Render content with HTML support for links */}
+                  {message.content.includes('<a href=') ? (
+                    <div 
+                      className="text-sm whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{ __html: message.content }}
+                    />
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  )}
                   
                   {/* Trade Suggestion Card */}
                   {message.tradeDecision && message.tradeDecision.action !== 'hold' && (

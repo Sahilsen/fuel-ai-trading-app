@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useWallet, useAccount } from '@fuels/react';
-import { Address, bn } from 'fuels';
+import { Address, bn, TransactionResult } from 'fuels';
 import { MiraAmm, ReadonlyMiraAmm, buildPoolId } from 'mira-dex-ts';
 import { notificationService } from '@/services/NotificationService';
 import { BASE_ASSET_ID, getTokenBySymbol } from '@/config/tokens';
@@ -31,16 +31,31 @@ function formatBalance(balance: any, decimals: number): string {
   }
 }
 
+interface TransactionDetails {
+  hash: string;
+  action: 'buy' | 'sell';
+  tokenSymbol: string;
+  tokenAmount: number;
+  ethAmount: number;
+  effectivePrice: number;
+  priceInUSD: number;
+  gasUsed: string;
+  gasCost: number;
+  gasCostUSD: number;
+  totalCostETH: number;
+  totalCostUSD: number;
+}
+
 export const useTrading = () => {
   const { wallet: connectedWallet } = useWallet();
   const { account } = useAccount();
   const [isExecuting, setIsExecuting] = useState(false);
   const { isTestnet } = useNetwork();
 
-  const executeTrade = useCallback(async (decision: TradeDecision): Promise<boolean> => {
+  const executeTrade = useCallback(async (decision: TradeDecision): Promise<{ success: boolean; details?: TransactionDetails }> => {
     if (!connectedWallet || !account) {
       notificationService.error('Wallet Error', 'Please connect your wallet');
-      return false;
+      return { success: false };
     }
 
     setIsExecuting(true);
@@ -54,47 +69,25 @@ export const useTrading = () => {
         wallet: account,
       });
 
-      // Check if wallet has consolidateCoins method
-      const hasConsolidateMethod = typeof (connectedWallet as any).consolidateCoins === 'function';
-      console.log('Wallet has consolidateCoins method:', hasConsolidateMethod);
-
-      // For testnet, simulate the trade
-      // if (isTestnet) {
-      //   // Simulate network delay
-      //   await new Promise(resolve => setTimeout(resolve, 2000));
-
-      //   // Simulate success/failure (90% success rate)
-      //   const isSuccess = Math.random() > 0.1;
-
-      //   if (isSuccess) {
-      //     notificationService.success(
-      //       'Trade Simulated',
-      //       `Mock ${decision.action} of ${decision.amount} ${decision.token.symbol} executed successfully (testnet)`
-      //     );
-
-      //     // Log mock transaction
-      //     console.log('Mock Transaction:', {
-      //       hash: '0x' + Math.random().toString(16).substr(2, 64),
-      //       action: decision.action,
-      //       amount: decision.amount,
-      //       token: decision.token.symbol,
-      //       timestamp: Date.now()
-      //     });
-      //   } else {
-      //     throw new Error('Simulated transaction failed');
-      //   }
-
-      //   return isSuccess;
-      // }
+      // Check if it's a hold decision
+      if (decision.action === 'hold') {
+        notificationService.info('No Trade', 'Agent decided to hold position');
+        return { success: false };
+      }
 
       // For mainnet, execute real trade
       const provider = connectedWallet.provider;
 
       // Get token configuration
-      const tokenConfig = getTokenBySymbol(decision.token.symbol, false);
+      const tokenConfig = getTokenBySymbol(decision.token.symbol, isTestnet);
 
       if (!tokenConfig) {
         throw new Error('Token configuration not found');
+      }
+
+      // Skip if trying to trade ETH for ETH
+      if (tokenConfig.assetId === BASE_ASSET_ID) {
+        throw new Error('Cannot swap ETH for ETH');
       }
 
       console.log('Token configuration:', {
@@ -103,6 +96,8 @@ export const useTrading = () => {
         assetId: tokenConfig.assetId,
         decimals: tokenConfig.decimals
       });
+
+      console.log('ETH Asset ID:', BASE_ASSET_ID);
 
       // Check ETH balance for gas fees
       console.log('Checking ETH balance for gas fees...');
@@ -127,7 +122,6 @@ export const useTrading = () => {
           const address = Address.fromString(account);
           const spendableCoinsResponse = await connectedWallet.provider.getCoins(address);
 
-
           // Access the coins array safely
           const spendableCoins = spendableCoinsResponse && spendableCoinsResponse.coins ? spendableCoinsResponse.coins : [];
 
@@ -135,135 +129,76 @@ export const useTrading = () => {
 
           console.log(`Found ${spendableCoins.length} spendable coins in wallet`);
 
-          // If there are many small coins, offer to consolidate them
+          // If there are many small coins, warn the user
           if (spendableCoins.length > 5) {
             console.warn(`Your wallet has ${spendableCoins.length} UTXOs which may cause transaction issues`);
-
-            // Check if we can consolidate coins automatically
-            if (typeof (connectedWallet as any).consolidateCoins === 'function') {
-              const shouldConsolidate = window.confirm(
-                `Your wallet has ${spendableCoins.length} small transactions (UTXOs) which may cause issues. ` +
-                `Would you like to consolidate them now?`
-              );
-
-              if (shouldConsolidate) {
-                try {
-                  console.log('Consolidating UTXOs...');
-                  notificationService.info(
-                    'Consolidating UTXOs',
-                    'Please wait while your funds are being consolidated...'
-                  );
-
-                  // Determine base asset ID for consolidation (ETH)
-                  // const baseAssetId = spendableCoins[0]?.assetId || tokenConfig.assetId;
-                  const baseAssetId = await provider.getBaseAssetId()
-
-                  // Execute consolidation
-                  const result = await connectedWallet.consolidateCoins({
-
-                    assetId: baseAssetId,
-                    mode: 'parallel',
-                    outputNum: 1
-                  });
-
-                  console.log('Consolidation result:', result);
-
-                  notificationService.success(
-                    'UTXOs Consolidated',
-                    'Your funds have been consolidated. Please try your transaction again.'
-                  );
-
-                  // Return false to indicate the trade wasn't executed but consolidation was performed
-                  return false;
-                } catch (consolidateError) {
-                  console.error('Failed to consolidate UTXOs:', consolidateError);
-
-                  // Continue with the trade attempt even if consolidation fails
-                  notificationService.warning(
-                    'UTXO Consolidation Failed',
-                    'Attempting to proceed with the trade anyway, but it may fail due to UTXO fragmentation.'
-                  );
-                }
-              } else {
-                notificationService.warning(
-                  'UTXO Fragmentation',
-                  `Proceeding without consolidation, but the transaction may fail.`
-                );
-              }
-            } else {
-              // Manual consolidation warning
-              notificationService.warning(
-                'UTXO Fragmentation Detected',
-                `Your wallet has ${spendableCoins.length} small transactions which may cause issues. Consider consolidating your funds by sending yourself a single transaction first.`
-              );
-            }
           }
         }
       } catch (e) {
         console.error('Failed to check UTXO fragmentation:', e);
       }
 
-      // For token swaps, we need to determine the trading pair
-      // If trading FUEL, we need to know what we're trading it against
-      // For now, let's assume FUEL/USDC pairs exist on Mira
+      // For token swaps on Mira
       try {
         // Create Mira AMM instance
         const miraAmm = new MiraAmm(connectedWallet);
 
-        // Determine the base currency for the trade
-        // For non-USDC trades, we'll use USDC as the base currency
-        // This supports FUEL/USDC, ETH/USDC pairs
-        const baseTokenSymbol = 'ETH';
-        const baseTokenConfig = getTokenBySymbol(baseTokenSymbol, false);
-
-        if (!baseTokenConfig) {
-          throw new Error(`Base token ${baseTokenSymbol} configuration not found`);
-        }
-
         console.log('Trading pair:', {
           token: tokenConfig.symbol,
-          base: baseTokenConfig.symbol,
+          base: 'ETH',
           action: decision.action
         });
 
-        // Prepare swap parameters with correct decimals
+        // Prepare swap parameters
         let amountIn;
 
         // Convert the amount to BN with proper decimal places
         try {
-          // For buy orders: we're spending base currency (USDC) to get the token
-          // For sell orders: we're spending the token to get base currency (USDC)
-          const inputToken = decision.action === 'buy' ? baseTokenConfig : tokenConfig;
-          const multiplier = Math.pow(10, inputToken.decimals);
-          amountIn = bn(Math.floor(decision.amount * multiplier).toString());
+          if (decision.action === 'buy') {
+            // For buy: we need to calculate how much ETH to spend
+            // This is a simplified calculation - in production you'd use getAmountsIn
+            const tokenPrice = decision.token.price; // Price in USD
+            const ethPrice = 2000; // You should get this from market data
+            const ethAmount = (decision.amount * tokenPrice) / ethPrice;
+            amountIn = bn(Math.floor(ethAmount * Math.pow(10, 9)).toString()); // ETH has 9 decimals
+          } else {
+            // For sell: we're selling the token amount
+            const tokenDecimals = tokenConfig.decimals;
+            amountIn = bn(Math.floor(decision.amount * Math.pow(10, tokenDecimals)).toString());
+          }
         } catch (e) {
           console.error('Error converting amount:', e);
-          amountIn = bn(decision.amount.toString());
+          throw new Error('Failed to calculate swap amounts');
         }
 
         console.log('Amount for swap:', {
           original: decision.amount,
-          bn: amountIn.toString(),
-          action: decision.action
+          amountIn: amountIn.toString(),
+          action: decision.action,
+          inputToken: decision.action === 'buy' ? 'ETH' : tokenConfig.symbol,
+          outputToken: decision.action === 'buy' ? tokenConfig.symbol : 'ETH'
         });
 
         // Determine the asset IDs for swap based on the action
+        // ALWAYS use ETH as the base currency
         const assetIn = decision.action === 'buy'
-          ? { bits: baseTokenConfig.assetId }  // Buy with USDC
+          ? { bits: BASE_ASSET_ID }  // Buy with ETH
           : { bits: tokenConfig.assetId };     // Sell token
 
         const assetOut = decision.action === 'buy'
           ? { bits: tokenConfig.assetId }      // Get token
-          : { bits: baseTokenConfig.assetId }; // Get USDC
+          : { bits: BASE_ASSET_ID }; // Get ETH
 
-        // Build pool ID
-
-        const poolId = buildPoolId(assetIn, assetOut, true); // false for volatile pool
+        // Build pool ID - the order matters!
+        // For Mira, pools are identified by the token pair
+        const poolId = buildPoolId(assetIn, assetOut, false); // false for volatile pool
 
         console.log('Pool ID constructed:', poolId);
         console.log('Asset IDs:', {
           assetIn: assetIn.bits,
-          assetOut: assetOut.bits
+          assetOut: assetOut.bits,
+          assetInSymbol: decision.action === 'buy' ? 'ETH' : tokenConfig.symbol,
+          assetOutSymbol: decision.action === 'buy' ? tokenConfig.symbol : 'ETH'
         });
 
         // Get current block height for deadline
@@ -275,38 +210,37 @@ export const useTrading = () => {
 
         const deadline = currentBlock.height.add(100); // 100 blocks deadline
 
-        // Calculate minAmountOut with 2% slippage (98% of expected)
-        // For simplicity, we'll use 50% of input amount as a conservative minimum
-        // const minAmountOut = amountIn.mul(bn(50)).div(bn(100));
-
+        // Calculate minAmountOut with slippage protection
         const miraAmmReader = new ReadonlyMiraAmm(provider);
 
-         // Calculate the expected output amount
-    const result_out = await miraAmmReader.getAmountsOut(
-      { bits: baseTokenConfig.assetId },
-      amountIn,
-      [poolId],
-    );
+        // Calculate the expected output amount using ETH as input
+        const result_out = await miraAmmReader.getAmountsOut(
+          { bits: assetIn.bits }, // Use the actual input asset
+          amountIn,
+          [poolId],
+        );
 
-    if (!result_out || result_out.length === 0 || !result_out[0] || result_out[0].length < 2) {
-      throw new Error('Failed to calculate output amount');
-    }
+        if (!result_out || result_out.length === 0 || !result_out[0] || result_out[0].length < 2) {
+          throw new Error('Failed to calculate output amount');
+        }
 
-    let amountOutWei;
-    if (result_out[1] && result_out[1][0].bits === assetOut.bits) {
-      amountOutWei = result_out[1][1];
-    } else if (result_out[0][0].bits === assetOut.bits) {
-      amountOutWei = result_out[0][1];
-    }
+        let amountOutWei;
+        if (result_out[1] && result_out[1][0].bits === assetOut.bits) {
+          amountOutWei = result_out[1][1];
+        } else if (result_out[0][0].bits === assetOut.bits) {
+          amountOutWei = result_out[0][1];
+        }
 
-    if (!amountOutWei) {
-      throw new Error('Failed to calculate output amount');
-    }
+        if (!amountOutWei) {
+          throw new Error('Failed to calculate output amount');
+        }
 
-    const minAmountOut = amountOutWei
-      .mul(bn(100 - Math.floor(0.01 * 100)))
-      .div(bn(100));
-        console.log('Min amount out (50% of input):', minAmountOut.toString());
+        // Apply 1% slippage tolerance
+        const minAmountOut = amountOutWei
+          .mul(bn(99))
+          .div(bn(100));
+        
+        console.log('Min amount out (with 1% slippage):', minAmountOut.toString());
 
         // Log the exact parameters being sent to swapExactInput
         console.log('Executing swap with params:', {
@@ -317,137 +251,171 @@ export const useTrading = () => {
           deadline: deadline.toString()
         });
 
-        let txRequest
+        // Execute the swap
+        let txRequest;
+        try {
+          console.log('Creating swap transaction...');
+          
+          // Create the swap transaction with optimized gas settings
+          txRequest = await miraAmm.swapExactInput(
+            amountIn,
+            assetIn,
+            minAmountOut,
+            [poolId],
+            deadline,
+            {
+              gasLimit: 1000000, // Set a reasonable gas limit
+              variableOutputs: 1, // Reduce variable outputs to save gas
+            }
+          );
 
-       try{
-         // Try with smaller gas limit and fewer options
-         txRequest = await miraAmm.swapExactInput(
-          amountIn,
-          assetIn,
-          minAmountOut,
-          [poolId],
-          deadline,
-          { gasLimit: 1000000, maxFee: 1000000, } // Lower gas limit
-        );
+          console.log('Transaction request created:', txRequest);
+          
+          // Check if txRequest is valid
+          if (!txRequest || typeof txRequest !== 'object') {
+            throw new Error('Invalid transaction request from Mira');
+          }
 
-        console.log({txRequest})
-       } catch(e){
-        console.error('error while swapExactInput: ', e)
-       }
-
-        console.log('Transaction request created');
-
-        // Send transaction
-        console.log('Sending transaction...');
-        const response = await connectedWallet.sendTransaction(txRequest!);
-        console.log('Transaction sent:', response);
-
-        // Wait for confirmation
-        console.log('Waiting for confirmation...');
-        const result = await response.wait();
-        console.log('Transaction confirmed:', result);
-
-        notificationService.success(
-          'Trade Executed',
-          `Successfully ${decision.action === 'buy' ? 'bought' : 'sold'} ${decision.amount} ${decision.token.symbol}`
-        );
-
-        return true;
-
-      } catch (miraError) {
-        console.error('Mira AMM error:', miraError);
-
-        // Try to extract meaningful information from the error
-        const errorStr = String(miraError); // Convert to string safely
-        console.log('Full error string:', errorStr);
-
-        // If Mira fails, provide a more helpful error message
-        if (miraError instanceof Error) {
-          // Try a self-transfer to consolidate UTXOs if we see this specific error
-          if (
-            errorStr.includes('Insufficient funds or too many small value coins') ||
-            errorStr.includes('MAX_INPUTS_EXCEEDED') ||
-            errorStr.includes('INSUFFICIENT_FUNDS') ||
-            errorStr.includes('too many small value coins')
-          ) {
-            // Offer automatic UTXO consolidation
+        } catch (e) {
+          console.error('Error creating swap transaction:', e);
+          
+          // If insufficient funds, offer to consolidate UTXOs
+          if (String(e).includes('Insufficient funds') || String(e).includes('MAX_INPUTS_EXCEEDED')) {
             const shouldConsolidate = window.confirm(
-              `UTXO Fragmentation Detected: Your ${decision.token.symbol} is split into too many small UTXOs. ` +
-              `Would you like to consolidate them now to fix this issue?`
+              `Transaction failed due to insufficient funds or UTXO fragmentation. ` +
+              `Would you like to consolidate your UTXOs and try again?`
             );
 
-            if (shouldConsolidate) {
+            if (shouldConsolidate && typeof connectedWallet.consolidateCoins === 'function') {
               try {
-                console.log('Attempting to consolidate UTXOs...');
+                console.log('Consolidating UTXOs...');
                 notificationService.info(
                   'Consolidating UTXOs',
                   'Please wait while your funds are being consolidated...'
                 );
 
-                // Try direct token self-transfer if consolidateCoins isn't available
-                if (typeof connectedWallet.consolidateCoins !== 'function') {
-                  // Get token balance
-                  const tokenBalance = await connectedWallet.getBalance(tokenConfig.assetId);
-                  console.log(`${tokenConfig.symbol} balance for consolidation:`, tokenBalance.toString());
+                const baseAssetId = await provider.getBaseAssetId();
+                const result = await connectedWallet.consolidateCoins({
+                  assetId: baseAssetId,
+                  mode: 'sequential',
+                  outputNum: 1
+                });
 
-                  // Calculate amount to send (keep some for gas if it's ETH)
-                  const gasAmount = tokenConfig.symbol === 'ETH' ? bn(50000000) : bn(0); // 0.05 ETH for gas
-                  let sendAmount = tokenBalance.sub(gasAmount);
+                console.log('Consolidation result:', result);
 
-                  // Ensure we're not sending a negative amount
-                  if (sendAmount.lte(bn(0))) {
-                    throw new Error('Insufficient balance for consolidation');
-                  }
+                notificationService.success(
+                  'UTXOs Consolidated',
+                  'Your funds have been consolidated. Please try your transaction again.'
+                );
 
-                  console.log('Self-transfer amount:', sendAmount.toString());
-
-                  // Create a self-transfer transaction
-                  const txRequest = await connectedWallet.createTransfer(account, sendAmount, tokenConfig.assetId);
-
-                  // Send the transaction
-                  const response = await connectedWallet.sendTransaction(txRequest);
-                  const result = await response.wait();
-
-                  console.log('Self-transfer successful:', result);
-
-                  notificationService.success(
-                    'UTXOs Consolidated',
-                    'Your funds have been consolidated. Please try your transaction again in a few moments.'
-                  );
-                } else {
-                  // Use consolidateCoins method if available
-
-                  console.log({ tokenConfig })
-                  const baseAssetId = await provider.getBaseAssetId()
-                  const result = await connectedWallet.consolidateCoins({
-                    // assetId: tokenConfig.assetId,
-                    assetId: baseAssetId,
-                    mode: 'sequential',
-                    outputNum: 1
-                  });
-
-                  console.log('Consolidation result:', result);
-
-                  notificationService.success(
-                    'UTXOs Consolidated',
-                    'Your funds have been consolidated. Please try your transaction again in a few moments.'
-                  );
-                }
-
-                throw new Error(`Consolidation completed. Please try your transaction again.`);
+                return { success: false };
               } catch (consolidateError) {
                 console.error('Failed to consolidate UTXOs:', consolidateError);
-                throw new Error(`UTXO Fragmentation Issue: Your ${tokenConfig.symbol} is split into too many small UTXOs. We tried to consolidate but encountered an error: ${String(consolidateError)}`);
               }
-            } else {
-              throw new Error(`UTXO Fragmentation Issue: Your ${tokenConfig.symbol} is split into too many small UTXOs. Try sending yourself all your ${tokenConfig.symbol} in a single transaction to consolidate funds.`);
             }
           }
+          
+          throw e;
+        }
 
-          // Rethrow the original error with full details
+        // Send transaction with proper error handling
+        let response;
+        try {
+          console.log('Sending transaction...');
+          
+          // Send the transaction request directly
+          response = await connectedWallet.sendTransaction(txRequest);
+          console.log('Transaction sent:', response);
+        } catch (sendError) {
+          console.error('Error sending transaction:', sendError);
+          console.error('Transaction that failed:', txRequest);
+          
+          // Check if it's a wallet error
+          if (String(sendError).includes('User rejected') || String(sendError).includes('cancelled')) {
+            throw new Error('Transaction cancelled by user');
+          }
+          
+          throw sendError;
+        }
+
+        // Wait for confirmation
+        console.log('Waiting for confirmation...');
+        const result = await response.waitForResult();
+        console.log('Transaction confirmed:', result);
+
+        // Extract transaction details
+        const txHash = result.id || 'Unknown';
+        const gasUsed = result.fee ? result.fee.format() : 'Unknown';
+        const gasCost = result.fee ? parseFloat(formatBalance(result.fee, 9)) : 0;
+        const gasUsedAmount = result.gasUsed ? result.gasUsed.toString() : 'Unknown';
+        
+        // Calculate actual amounts from the transaction
+        let actualAmountIn = formatBalance(amountIn, decision.action === 'buy' ? 9 : tokenConfig.decimals);
+        let actualAmountOut = formatBalance(minAmountOut, decision.action === 'buy' ? tokenConfig.decimals : 9);
+        
+        // Log transaction details
+        console.log('Transaction result details:', {
+          transactionId: txHash,
+          fee: result.fee?.toString(),
+          gasUsed: gasUsedAmount,
+          receipts: result.receipts,
+          status: result.status
+        });
+
+        // Calculate price per token
+        const ethAmount = decision.action === 'buy' ? parseFloat(actualAmountIn) : parseFloat(actualAmountOut);
+        const tokenAmount = decision.action === 'buy' ? decision.amount : parseFloat(actualAmountIn);
+        const effectivePrice = ethAmount / tokenAmount;
+        const priceInUSD = effectivePrice * 2000; // Assuming ETH = $2000, you should use actual ETH price
+
+        // Create detailed transaction summary
+        const txDetails: TransactionDetails = {
+          hash: txHash,
+          action: decision.action as 'buy' | 'sell', // Ensure it's only buy or sell
+          tokenSymbol: tokenConfig.symbol,
+          tokenAmount: tokenAmount,
+          ethAmount: ethAmount,
+          effectivePrice: effectivePrice,
+          priceInUSD: priceInUSD,
+          gasUsed: gasUsed,
+          gasCost: gasCost,
+          gasCostUSD: gasCost * 2000, // Assuming ETH = $2000
+          totalCostETH: decision.action === 'buy' ? ethAmount + gasCost : gasCost,
+          totalCostUSD: decision.action === 'buy' ? (ethAmount + gasCost) * 2000 : gasCost * 2000
+        };
+
+        console.log('Transaction Details:', txDetails);
+
+        // Create a formatted message for the notification
+        const txSummary = decision.action === 'buy' 
+          ? `Bought ${tokenAmount} ${tokenConfig.symbol} for ${ethAmount.toFixed(6)} ETH (~$${(ethAmount * 2000).toFixed(2)})`
+          : `Sold ${tokenAmount} ${tokenConfig.symbol} for ${ethAmount.toFixed(6)} ETH (~$${(ethAmount * 2000).toFixed(2)})`;
+
+        notificationService.success(
+          'Trade Executed',
+          `${txSummary}. Gas: ${gasCost.toFixed(6)} ETH (~$${(gasCost * 2000).toFixed(2)})`
+        );
+
+        // Return transaction details for the chat
+        return { success: true, details: txDetails };
+
+      } catch (miraError) {
+        console.error('Mira AMM error:', miraError);
+
+        // Try to extract meaningful information from the error
+        const errorStr = String(miraError);
+        console.log('Full error string:', errorStr);
+
+        // Provide helpful error messages
+        if (errorStr.includes('Insufficient funds')) {
+          throw new Error(`Insufficient ETH balance for this trade. You have ${formatBalance(ethBalance, 9)} ETH.`);
+        } else if (errorStr.includes('Pool not found') || errorStr.includes('pool does not exist')) {
+          throw new Error(`No liquidity pool found for ETH/${tokenConfig.symbol} pair on ${isTestnet ? 'testnet' : 'mainnet'}.`);
+        } else if (errorStr.includes('slippage')) {
+          throw new Error('Transaction would exceed slippage tolerance. Try a smaller amount.');
+        } else if (miraError instanceof Error) {
           throw new Error(`Swap failed: ${miraError.message}`);
         } else {
-          // Handle non-Error objects
           throw new Error(`Swap failed: ${errorStr}`);
         }
       }
@@ -458,7 +426,7 @@ export const useTrading = () => {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       notificationService.error('Trade Failed', errorMessage);
 
-      return false;
+      return { success: false };
     } finally {
       setIsExecuting(false);
     }

@@ -12,6 +12,7 @@ import { WhaleActivity } from './WhaleActivity';
 import { WalletBalance } from '@/components/wallet/WalletBalance';
 import { NotificationContainer } from '@/components/common/NotificationToast';
 import { AgentPersonality, TradeDecision, ChatMessage } from '@/types';
+import { useNetwork } from '@/contexts/NetworkContext';
 
 interface TradingDashboardProps {
   agentType: AgentPersonality;
@@ -26,50 +27,51 @@ export const TradingDashboard: React.FC<TradingDashboardProps> = ({
   const { agent, marketData, getMetrics } = useAgent(agentType, selectedToken);
   const { executeTrade, isExecuting } = useTrading();
   const { notifications, removeNotification } = useNotifications();
+  const { isTestnet } = useNetwork();
   
   const [pendingTrade, setPendingTrade] = useState<TradeDecision | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSendMessage = useCallback(async (message: string) => {
-  if (!agent) return;
+    if (!agent) return;
 
-  // Add user message
-  const userMessage: ChatMessage = {
-    id: Date.now().toString(),
-    role: 'user',
-    content: message,
-    timestamp: Date.now()
-  };
-  setChatMessages(prev => [...prev, userMessage]);
-
-  setIsLoading(true);
-  try {
-    // Get agent response - the market data already has the selected token
-    const { response, tradeDecision } = await agent.chat(message, marketData);
-    
-    // Add agent message
-    const agentMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: response,
-      timestamp: Date.now(),
-      tradeDecision
-    };
-    setChatMessages(prev => [...prev, agentMessage]);
-  } catch (error) {
-    console.error('Chat error:', error);
-    const errorMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: 'Sorry, I encountered an error. Please try again.',
+    // Add user message
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: message,
       timestamp: Date.now()
     };
-    setChatMessages(prev => [...prev, errorMessage]);
-  } finally {
-    setIsLoading(false);
-  }
-}, [agent, marketData]);
+    setChatMessages(prev => [...prev, userMessage]);
+
+    setIsLoading(true);
+    try {
+      // Get agent response - the market data already has the selected token
+      const { response, tradeDecision } = await agent.chat(message, marketData);
+      
+      // Add agent message
+      const agentMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: response,
+        timestamp: Date.now(),
+        tradeDecision
+      };
+      setChatMessages(prev => [...prev, agentMessage]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: Date.now()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [agent, marketData]);
 
   const handleTradeClick = useCallback((trade: TradeDecision) => {
     setPendingTrade(trade);
@@ -77,10 +79,34 @@ export const TradingDashboard: React.FC<TradingDashboardProps> = ({
 
   const handleTradeConfirm = useCallback(async (approved: boolean) => {
     if (approved && pendingTrade) {
-      await executeTrade(pendingTrade);
+      const result = await executeTrade(pendingTrade);
+      
+      // If trade was successful, add transaction details to chat
+      if (result.success && result.details) {
+        // Determine the explorer URL based on network
+        const explorerBaseUrl = isTestnet 
+          ? 'https://app.fuel.network/tx/' 
+          : 'https://app.fuel.network/tx/'; // Same URL for both networks currently
+        
+        const txUrl = `${explorerBaseUrl}${result.details.hash}`;
+        
+        const txMessage: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          role: 'assistant',
+          content: `✅ Transaction Complete!\n\n` +
+            `🔗 <a href="${txUrl}" target="_blank" rel="noopener noreferrer" style="color: #00F58C; text-decoration: underline;">View on Fuel Explorer</a>\n` +
+            `💰 ${result.details.action === 'buy' ? 'Bought' : 'Sold'}: ${result.details.tokenAmount} ${result.details.tokenSymbol}\n` +
+            `💸 ETH ${result.details.action === 'buy' ? 'Spent' : 'Received'}: ${result.details.ethAmount.toFixed(6)} ETH (~$${(result.details.ethAmount * 2000).toFixed(2)})\n` +
+            `📊 Price: ${result.details.effectivePrice.toFixed(6)} ETH per ${result.details.tokenSymbol} (~$${result.details.priceInUSD.toFixed(2)})\n` +
+            `⛽ Gas Cost: ${result.details.gasCost.toFixed(6)} ETH (~$${result.details.gasCostUSD.toFixed(2)})\n` +
+            `💵 Total Cost: ${result.details.totalCostETH.toFixed(6)} ETH (~$${result.details.totalCostUSD.toFixed(2)})`,
+          timestamp: Date.now()
+        };
+        setChatMessages(prev => [...prev, txMessage]);
+      }
     }
     setPendingTrade(null);
-  }, [pendingTrade, executeTrade]);
+  }, [pendingTrade, executeTrade, isTestnet]);
 
   const handleTokenChange = useCallback((token: string) => {
     setSelectedToken(token);
